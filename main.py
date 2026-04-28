@@ -3,6 +3,7 @@ import os
 from langchain_core.prompts import PromptTemplate
 
 from langchain_google_genai import GoogleGenerativeAI
+from langchain_ollama import ChatOllama
 
 load_dotenv()
 
@@ -30,6 +31,8 @@ def main():
     )
 
     llm = GoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+    # llm = ChatOllama(model="gemma3:270m", temperature=0.7)
+
     chain = summary_prompt_template | llm
     response = chain.invoke(input = {"information": information})
     print(response)
