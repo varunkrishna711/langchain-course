@@ -94,78 +94,57 @@ react_prompt = f"""
 
 @traceable(name="Ollama chat", run_type="llm")
 def ollama_chat_traced(model, messages, options):
-    return ollama.chat(model=MODEL, tools=tools_for_llm, messages=messages)
+    return ollama.chat(model=MODEL, messages=messages, options=options)
  
+
 # Agent Loop 
 @traceable(name="Ollama agent loop")
 def run_agent(question: str):
-    tools_dict = {
-        "get_product_price": get_product_price,
-        "apply_discount": apply_discount
-    }
 
     print(f"Question:{question}")
     print("=" * 60)
 
-    messages = [
-        {
-            "role": "system",
-            "content" : (
-                "You are a helpful shopping assistant."
-                "You have access to a product catalog tool."
-                "Find the discount of the product"
-                "STRICT RULES TO FOLLOW - you must follow these exactly"
-                "1. NEVER guess or assume any product price."
-                "You must call get_product_price() to get the real price \n"
-                "2. Only call apply_discount() after you have received"
-                "a price from  get_product_price(). Pass the exact price"
-                "returned by get_product_price() - do not pass a made-up number. \n"
-                "3. NEVER calculate discounts yourself using math."
-                "Always use the apply_discount() tool. \n"
-                "4. If the use does not specify a discount tier,"
-                "Ask them which tier to use - do not assume one"
-            ),
-        },
-        
-        {"role": "user", "content": question}
-    ]
-
+    prompt = react_prompt.format(question=question)
+    scratchpad = ""
+    
     for iteration in range(1, MAX_ITERATIONS + 1):
         print(f"Iteration: {iteration}")
 
-        response = ollama_chat_traced(messages=messages)
-        ai_message = response.message
+        full_prompt = prompt + scratchpad
 
-        tool_calls = ai_message.tool_calls
-        
-        # If no tool calls (meaning all the tools are called once), this is the final answer
-        if not tool_calls:
-            print(f"Final answer: {ai_message.content}")
-            return ai_message.content
-
-        # Process only the first tool call
-        tool_call = tool_calls[0]
-        tool_name = tool_call.function.name
-        tool_args = tool_call.function.arguments
-        # tool_call_id = tool_call.get("id")
-
-        print(f"[Tool Selected] {tool_name} with args: {tool_args}")
-
-        tool_to_use = tools_dict.get(tool_name)
-        if tool_to_use is None:
-            raise ValueError(f"Tool '{tool_name}' is not found")
-
-        observation = tool_to_use(**tool_args)
-
-        print(f"[Tool Result]: {observation}")
-
-        messages.append(ai_message)
-        messages.append(
-           {
-               "role" : "tool",
-               "content": str(observation)
-           }
+        response = ollama_chat_traced(
+            model = MODEL,
+            messages = [{"role":"user", "content": full_prompt}],
+            options = { "temperature": 0}
         )
+        
+        output = response.message.content
+        print(f"LLM output: \n{output}")
+
+        print(f"[Parsing]  Looking for final answer in LLM output...")
+        final_answer_match = re.search(r"Final Answer:\s*(.+)", output)
+        if final_answer_match:
+            final_answer = final_answer_match.group(1).strip()
+            print("\n" + "=" * 60)
+            print(f"Final Answer: {final_answer}")
+       
+
+        print(f"[Parsing]  Looking for Action and Action Input in LLM output...")
+
+        action_match = re.search(r"Action:\s*(.+)", output)
+        action_input_match = re.search(r"Action Input:\s*(.+)", output)
+
+        if not action_match:
+            print(f"[Parsing] ERROR: Could not parse Action/Action Input from LLM output")
+            break
+
+
+        tool_name = action_match.group(1).strip()
+        tool_input_raw = action_input_match.group(1).strip()
+
+        print(f"[Tool Selected] {tool_name} with args: {tool_input_raw}")
+
+        # raw_args = [x.strip() for x ]
 
     print(f"ERROR: Maximum iterations reached without final answer")
     return None
