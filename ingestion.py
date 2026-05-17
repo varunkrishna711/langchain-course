@@ -3,7 +3,7 @@ import os
 
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 load_dotenv()
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     texts = text_splitter.split_documents(document)
     print(f"Created {len(texts)} chunks")
 
-    embeddings = OpenAIEmbeddings(openai_api_key=os.environ.get("OPENAI_API_KEY"))
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
     print("Ingesting")
 
